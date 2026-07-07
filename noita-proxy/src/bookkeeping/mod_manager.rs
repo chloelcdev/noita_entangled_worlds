@@ -215,7 +215,20 @@ impl Modmanager {
 
                 self.state = match is_mod_ok(&mod_path).wrap_err("Failed to check if mod is ok") {
                     Ok(true) => State::Done,
-                    Ok(false) => State::ConfirmInstall,
+                    Ok(false) => {
+                        if let Some(local_mod) = find_local_dev_mod() {
+                            info!("Mod missing, installing from local dev folder");
+                            match install_local_mod(&local_mod, &mod_path) {
+                                Ok(()) => State::UnpackDone,
+                                Err(err) => {
+                                    error!("Failed to auto-install local mod: {}", err);
+                                    State::ConfirmInstall
+                                }
+                            }
+                        } else {
+                            State::ConfirmInstall
+                        }
+                    }
                     Err(err) => {
                         error!("Could not check if mod is ok: {}", err);
                         State::EyreErrorReport(err)
@@ -226,6 +239,24 @@ impl Modmanager {
                 let mod_path = settings.mod_path();
                 ui.label(tr("modman_will_install_to"));
                 ui.label(mod_path.display().to_string());
+                if let Some(local_mod) = find_local_dev_mod() {
+                    ui.label("Found quant.ew next to the proxy (dev build).");
+                    ui.label(local_mod.display().to_string());
+                    if ui.button("Install from local folder").clicked() {
+                        assert!(mod_path.ends_with("quant.ew"));
+                        match install_local_mod(&local_mod, &mod_path) {
+                            Ok(()) => {
+                                info!("Installed mod from local folder");
+                                self.state = State::UnpackDone;
+                            }
+                            Err(err) => {
+                                error!("Failed to install local mod: {}", err);
+                                self.state = State::EyreErrorReport(err);
+                            }
+                        }
+                    }
+                    ui.separator();
+                }
                 ui.horizontal(|ui| {
                     if ui.button(tr("button_confirm")).clicked() {
                         let download_path = PathBuf::from("mod.zip");
@@ -233,9 +264,8 @@ impl Modmanager {
                         let promise = Promise::spawn_thread("release-request", move || {
                             mod_downloader_for(tag, download_path)
                         });
-                        // Make sure we are deleting the right thing
                         assert!(mod_path.ends_with("quant.ew"));
-                        fs::remove_dir_all(mod_path).ok();
+                        fs::remove_dir_all(&mod_path).ok();
                         info!("Current mod deleted");
                         info!("Switching to DownloadMod state");
                         self.state = State::DownloadMod(promise)
@@ -392,6 +422,51 @@ fn extract_zip(zip_file: &Path, extract_to: PathBuf) -> Result<(), eyre::Error> 
     Ok(())
 }
 
+fn find_local_dev_mod() -> Option<PathBuf> {
+    let mut dir = env::current_exe().ok()?.parent()?.to_path_buf();
+    for _ in 0..4 {
+        let candidate = dir.join("quant.ew");
+        if candidate.join("init.lua").exists() {
+            info!("Found local dev mod at {}", candidate.display());
+            return Some(candidate);
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> eyre::Result<()> {
+    fs::create_dir_all(dst).wrap_err_with(|| format!("Failed to create {}", dst.display()))?;
+    for entry in fs::read_dir(src).wrap_err_with(|| format!("Failed to read {}", src.display()))? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let dest_path = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&entry.path(), &dest_path)?;
+        } else {
+            fs::copy(entry.path(), &dest_path).wrap_err_with(|| {
+                format!(
+                    "Failed to copy {} to {}",
+                    entry.path().display(),
+                    dest_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn install_local_mod(src: &Path, dest: &Path) -> eyre::Result<()> {
+    if dest.try_exists().unwrap_or(false) {
+        fs::remove_dir_all(dest)
+            .wrap_err_with(|| format!("Failed to remove {}", dest.display()))?;
+    }
+    copy_dir_all(src, dest)?;
+    Ok(())
+}
+
 fn is_mod_ok(mod_path: &Path) -> eyre::Result<bool> {
     if env::var_os("NP_SKIP_MOD_CHECK").is_some() {
         return Ok(true);
@@ -402,6 +477,10 @@ fn is_mod_ok(mod_path: &Path) -> eyre::Result<bool> {
     {
         return Ok(false);
     }
+    if !mod_path.join("init.lua").exists() {
+        return Ok(false);
+    }
+
     let version_path = mod_path.join("files/version.lua");
     let version = fs::read_to_string(version_path)
         .ok()
@@ -409,9 +488,17 @@ fn is_mod_ok(mod_path: &Path) -> eyre::Result<bool> {
 
     info!("Mod version: {:?}", version);
 
-    if Some(Version::current()) != version {
-        info!("Mod version differs");
-        return Ok(false);
+    if env::var_os("NP_FORCE_MOD_INSTALL").is_some() {
+        if Some(Version::current()) != version {
+            info!("Mod version differs (NP_FORCE_MOD_INSTALL set)");
+            return Ok(false);
+        }
+    } else if Some(Version::current()) != version {
+        warn!(
+            "Installed mod version {:?} differs from proxy {} — keeping your installed mod",
+            version,
+            Version::current()
+        );
     }
 
     info!("Mod is ok");

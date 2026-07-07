@@ -38,7 +38,7 @@ echo Building noita_proxy ^(release^)...
 echo Build output: %OUT%
 echo.
 
-cd noita_proxy
+cd noita-proxy
 cargo build --release
 if errorlevel 1 (
     echo.
