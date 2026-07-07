@@ -16,6 +16,7 @@ pub struct GameSettings {
     pub debug_mode: Option<bool>,
     pub use_constant_seed: bool,
     pub duplicate: Option<bool>,
+    pub duplicate_wands_spells: Option<bool>,
     pub enemy_hp_mult: Option<f32>,
     pub game_mode: Option<GameMode>,
     pub friendly_fire: Option<bool>,
@@ -67,6 +68,7 @@ pub struct DefaultSettings {
     pub nice_terraforming: bool,
     pub same_loadout: bool,
     pub duplicate: bool,
+    pub duplicate_wands_spells: bool,
     pub disable_kummitus: bool,
     pub give_host_sampo: bool,
     pub home_on_players: bool,
@@ -103,6 +105,7 @@ impl Default for DefaultSettings {
             nice_terraforming: true,
             same_loadout: false,
             duplicate: false,
+            duplicate_wands_spells: false,
             disable_kummitus: false,
             give_host_sampo: false,
             home_on_players: false,
@@ -413,6 +416,20 @@ impl GameSettings {
                     .changed()
                 {
                     game_settings.duplicate = Some(temp)
+                }
+            }
+            {
+                let mut temp = game_settings
+                    .duplicate_wands_spells
+                    .unwrap_or(def.duplicate_wands_spells);
+                if ui
+                    .checkbox(
+                        &mut temp,
+                        "duplicate wands and spells (one per player)",
+                    )
+                    .changed()
+                {
+                    game_settings.duplicate_wands_spells = Some(temp)
                 }
             }
             {

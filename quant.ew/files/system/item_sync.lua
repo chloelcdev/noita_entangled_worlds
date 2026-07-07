@@ -122,6 +122,34 @@ local function is_wand(ent)
     return ComponentGetValue2(ability, "use_gun_script") == true
 end
 
+local function is_spell(ent)
+    return ent ~= nil and ent ~= 0 and EntityHasTag(ent, "card_action") and not is_wand(ent)
+end
+
+local function is_wand_or_spell(ent)
+    return is_wand(ent) or is_spell(ent)
+end
+
+local function get_loot_key(item)
+    local loot_key = EntityGetFirstComponentIncludingDisabled(item, "VariableStorageComponent", "ew_loot_key")
+    if loot_key ~= nil then
+        return ComponentGetValue2(loot_key, "value_string")
+    end
+    local f = EntityGetFilename(item)
+    local x, y = EntityGetTransform(item)
+    return f .. ":" .. math.floor(x) .. ":" .. math.floor(y)
+end
+
+local function ensure_loot_key(item)
+    if EntityGetFirstComponentIncludingDisabled(item, "VariableStorageComponent", "ew_loot_key") ~= nil then
+        return
+    end
+    EntityAddComponent2(item, "VariableStorageComponent", {
+        _tags = "ew_loot_key",
+        value_string = get_loot_key(item),
+    })
+end
+
 local function is_safe_to_remove()
     return not ctx.is_wand_pickup
 end
@@ -241,6 +269,10 @@ local function make_global(item, give_authority_to)
 
     local item_data = inventory_helper.serialize_single_item(item)
     item_data.gid = gid
+
+    if ctx.proxy_opt.duplicate_wands_spells and is_wand_or_spell(item) then
+        ensure_loot_key(item)
+    end
 
     local _, _, has_hp = util.get_ent_health(item)
     if has_hp then
@@ -549,6 +581,12 @@ end)
 
 util.add_cross_call("ew_picked", function(picked_item)
     if picked_item ~= nil and EntityHasTag(picked_item, "ew_global_item") then
+        if ctx.proxy_opt.duplicate_wands_spells and is_wand_or_spell(picked_item) then
+            local loot_key = get_loot_key(picked_item)
+            if EntityGetFirstComponentIncludingDisabled(picked_item, "VariableStorageComponent", "ew_loot_key") ~= nil then
+                ctx.claimed_loot_keys[loot_key] = true
+            end
+        end
         local gid = item_sync.get_global_item_id(picked_item)
         if gid ~= nil then
             if ctx.is_host then
@@ -674,6 +712,14 @@ local function add_stuff_to_globalized_item(item, gid)
     ctx.item_prevent_localize[gid] = false
 end
 
+local function spawn_local_wand_spell_copy(item)
+    local item_data = inventory_helper.serialize_single_item(item)
+    local copy = inventory_helper.deserialize_single_item(item_data)
+    local gid = allocate_global_id()
+    add_stuff_to_globalized_item(copy, gid)
+    ensure_loot_key(copy)
+end
+
 rpc.opts_reliable()
 function rpc.initial_items(item_list)
     -- Only run once ever, as it tends to duplicate items otherwise
@@ -737,7 +783,19 @@ function rpc.item_localize(l_peer_id, item_id)
         end
     end
     if l_peer_id ~= ctx.my_id then
-        item_sync.remove_item_with_id(item_id)
+        if
+            ctx.proxy_opt.duplicate_wands_spells
+            and item_ent_id ~= nil
+            and is_wand_or_spell(item_ent_id)
+            and EntityGetFirstComponentIncludingDisabled(item_ent_id, "VariableStorageComponent", "ew_loot_key")
+                ~= nil
+            and not ctx.claimed_loot_keys[get_loot_key(item_ent_id)]
+        then
+            spawn_local_wand_spell_copy(item_ent_id)
+            item_sync.remove_item_with_id(item_id)
+        else
+            item_sync.remove_item_with_id(item_id)
+        end
     end
 end
 

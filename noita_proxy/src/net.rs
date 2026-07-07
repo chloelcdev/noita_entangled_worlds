@@ -1002,6 +1002,12 @@ impl NetManager {
             settings.home_on_players.unwrap_or(def.home_on_players),
         );
         state.try_ws_write_option("debug", settings.debug_mode.unwrap_or(def.debug_mode));
+        state.try_ws_write_option(
+            "duplicate_wands_spells",
+            settings
+                .duplicate_wands_spells
+                .unwrap_or(def.duplicate_wands_spells),
+        );
         if self.is_host() {
             self.duplicate.store(
                 settings.duplicate.unwrap_or(def.duplicate),
