@@ -8,6 +8,7 @@ set "CARGO_TARGET_DIR=%LOCALAPPDATA%\noita_proxy_target"
 set "CMAKE_POLICY_VERSION_MINIMUM=3.5"
 set "OUT=%CARGO_TARGET_DIR%\release"
 set "EXE=%OUT%\noita_proxy.exe"
+set "EXE_ALT=%OUT%\noita-proxy.exe"
 
 REM Load MSVC environment (cmake + linker need this)
 if exist "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" (
@@ -49,9 +50,14 @@ if errorlevel 1 (
 cd ..
 
 if not exist "%EXE%" (
-    echo Expected exe missing: %EXE%
-    pause
-    exit /b 1
+    if exist "%EXE_ALT%" (
+        echo Found %EXE_ALT% - copying to %EXE%
+        copy /Y "%EXE_ALT%" "%EXE%" >nul
+    ) else (
+        echo Expected exe missing: %EXE%
+        pause
+        exit /b 1
+    )
 )
 
 if exist "redist\steam_api64.dll" (

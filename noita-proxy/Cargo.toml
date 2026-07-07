@@ -10,6 +10,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "noita_proxy"
+path = "src/main.rs"
+
 [dependencies]
 eframe = { version="0.28.1", features = ["persistence", "glow", "default_fonts"], default-features = false }
 egui-file-dialog = "0.6.0"
