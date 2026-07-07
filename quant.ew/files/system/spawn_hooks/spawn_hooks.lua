@@ -18,13 +18,34 @@ exclude["data/entities/items/pickup/heart_fullhp.xml"] = true
 exclude["data/entities/items/pickup/heart_fullhp_temple.xml"] = true
 exclude["data/entities/items/pickup/perk_reroll.xml"] = true
 
+local function duplicate_option_enabled(key)
+    if ctx.proxy_opt[key] == true then
+        return true
+    end
+    return ModSettingGet("quant.ew." .. key) == true
+end
+
+local function is_wand_item_path(ent_path)
+    local prefix = "data/entities/items/"
+    return string.sub(ent_path, 1, #prefix) == prefix and string.find(ent_path, "wand", 1, true) ~= nil
+end
+
 -- This entity needs to be synced by item_sync
 local function is_sync_item(ent_path)
-    -- No item needs to be synced when this option is off.
-    if not ctx.proxy_opt.item_dedup then
+    if exclude[ent_path] then
         return false
     end
-    if exclude[ent_path] then
+    if duplicate_option_enabled("duplicate_wands") and is_wand_item_path(ent_path) then
+        return true
+    end
+    if duplicate_option_enabled("duplicate_spells") and ent_path == "data/entities/misc/custom_cards/action.xml" then
+        return true
+    end
+    if duplicate_option_enabled("duplicate_perks") and ent_path == "data/entities/items/pickup/perk.xml" then
+        return true
+    end
+    -- No item needs to be synced when this option is off.
+    if not ctx.proxy_opt.item_dedup then
         return false
     end
     local start = "data/entities/items/"

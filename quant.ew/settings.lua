@@ -31,6 +31,27 @@ local mod_id = "quant.ew" -- This should match the name of your mod's folder.
 mod_settings_version = 1 -- This is a magic global that can be used to migrate settings to new mod versions. call mod_settings_get_version() before mod_settings_update() to get the old value.
 mod_settings =
 {
+	{
+		id = "duplicate_wands",
+		ui_name = "Duplicate wands (one per player)",
+		ui_description = "When someone picks up a synced wand, other players get their own copy. Proxy host setting overrides this.",
+		value_default = false,
+		scope = MOD_SETTING_SCOPE_NEW_GAME,
+	},
+	{
+		id = "duplicate_spells",
+		ui_name = "Duplicate spells (one per player)",
+		ui_description = "When someone picks up a synced spell, other players get their own copy. Proxy host setting overrides this.",
+		value_default = false,
+		scope = MOD_SETTING_SCOPE_NEW_GAME,
+	},
+	{
+		id = "duplicate_perks",
+		ui_name = "Duplicate perks (one per player)",
+		ui_description = "When someone picks up a synced perk, other players get their own copy. Proxy host setting overrides this.",
+		value_default = false,
+		scope = MOD_SETTING_SCOPE_NEW_GAME,
+	},
 }
 
 -- This function is called to ensure the correct setting values are visible to the game via ModSettingGet(). your mod's settings don't work if you don't have a function like this defined in settings.lua.
