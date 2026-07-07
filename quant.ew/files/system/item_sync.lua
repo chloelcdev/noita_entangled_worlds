@@ -126,8 +126,28 @@ local function is_spell(ent)
     return ent ~= nil and ent ~= 0 and EntityHasTag(ent, "card_action") and not is_wand(ent)
 end
 
-local function is_wand_or_spell(ent)
-    return is_wand(ent) or is_spell(ent)
+local function is_perk(ent)
+    return ent ~= nil and ent ~= 0 and EntityGetFilename(ent) == "data/entities/items/pickup/perk.xml"
+end
+
+local function duplicate_option_enabled(key)
+    if ctx.proxy_opt[key] == true then
+        return true
+    end
+    return ModSettingGet("quant.ew." .. key) == true
+end
+
+local function should_duplicate_loot(ent)
+    if is_wand(ent) and duplicate_option_enabled("duplicate_wands") then
+        return true
+    end
+    if is_spell(ent) and duplicate_option_enabled("duplicate_spells") then
+        return true
+    end
+    if is_perk(ent) and duplicate_option_enabled("duplicate_perks") then
+        return true
+    end
+    return false
 end
 
 local function get_loot_key(item)
@@ -148,6 +168,44 @@ local function ensure_loot_key(item)
         _tags = "ew_loot_key",
         value_string = get_loot_key(item),
     })
+end
+
+local function mark_loot_claimed(item)
+    if not should_duplicate_loot(item) then
+        return
+    end
+    ctx.claimed_loot_keys[get_loot_key(item)] = true
+end
+
+local function mark_loot_claimed_by_key(loot_key)
+    if loot_key ~= nil and loot_key ~= "" then
+        ctx.claimed_loot_keys[loot_key] = true
+    end
+end
+
+local function apply_loot_key_from_data(item, item_data)
+    if item_data.loot_key ~= nil and item_data.loot_key ~= "" then
+        if EntityGetFirstComponentIncludingDisabled(item, "VariableStorageComponent", "ew_loot_key") == nil then
+            EntityAddComponent2(item, "VariableStorageComponent", {
+                _tags = "ew_loot_key",
+                value_string = item_data.loot_key,
+            })
+        end
+    end
+end
+
+local function cache_loot_template(item_data)
+    if item_data.gid ~= nil and item_data.loot_key ~= nil then
+        ctx.loot_templates[item_data.gid] = item_data
+    end
+end
+
+local function attach_loot_key_to_item_data(item, item_data)
+    if should_duplicate_loot(item) then
+        ensure_loot_key(item)
+        item_data.loot_key = get_loot_key(item)
+        cache_loot_template(item_data)
+    end
 end
 
 local function is_safe_to_remove()
@@ -226,9 +284,12 @@ function item_sync.host_localize_item(gid, peer_id)
 
     local item_ent_id = item_sync.find_by_gid(gid)
     if item_ent_id ~= nil then
+        mark_loot_claimed(item_ent_id)
         for _, handler in ipairs(pickup_handlers) do
             handler(item_ent_id)
         end
+    elseif ctx.loot_templates[gid] ~= nil then
+        mark_loot_claimed_by_key(ctx.loot_templates[gid].loot_key)
     end
     if peer_id ~= ctx.my_id then
         item_sync.remove_item_with_id(gid)
@@ -270,9 +331,7 @@ local function make_global(item, give_authority_to)
     local item_data = inventory_helper.serialize_single_item(item)
     item_data.gid = gid
 
-    if ctx.proxy_opt.duplicate_wands_spells and is_wand_or_spell(item) then
-        ensure_loot_key(item)
-    end
+    attach_loot_key_to_item_data(item, item_data)
 
     local _, _, has_hp = util.get_ent_health(item)
     if has_hp then
@@ -581,12 +640,7 @@ end)
 
 util.add_cross_call("ew_picked", function(picked_item)
     if picked_item ~= nil and EntityHasTag(picked_item, "ew_global_item") then
-        if ctx.proxy_opt.duplicate_wands_spells and is_wand_or_spell(picked_item) then
-            local loot_key = get_loot_key(picked_item)
-            if EntityGetFirstComponentIncludingDisabled(picked_item, "VariableStorageComponent", "ew_loot_key") ~= nil then
-                ctx.claimed_loot_keys[loot_key] = true
-            end
-        end
+        mark_loot_claimed(picked_item)
         local gid = item_sync.get_global_item_id(picked_item)
         if gid ~= nil then
             if ctx.is_host then
@@ -622,6 +676,27 @@ function item_sync.on_world_update()
             local com = EntityGetFirstComponentIncludingDisabled(wand, "ItemComponent")
             if com ~= nil then
                 ComponentSetValue2(com, "item_pickup_radius", 256)
+            end
+        end
+        if duplicate_option_enabled("duplicate_wands") and ctx.is_host then
+            for _, wand in ipairs(EntityGetWithTag("wand") or {}) do
+                if is_item_on_ground(wand) and not EntityHasTag(wand, "ew_global_item") then
+                    item_sync.make_item_global(wand, true)
+                end
+            end
+        end
+        if duplicate_option_enabled("duplicate_spells") and ctx.is_host then
+            for _, ent in ipairs(EntityGetWithTag("card_action") or {}) do
+                if is_spell(ent) and is_item_on_ground(ent) and not EntityHasTag(ent, "ew_global_item") then
+                    item_sync.make_item_global(ent, true)
+                end
+            end
+        end
+        if duplicate_option_enabled("duplicate_perks") and ctx.is_host then
+            for _, ent in ipairs(EntityGetWithTag("item_pickup") or {}) do
+                if is_perk(ent) and is_item_on_ground(ent) and not EntityHasTag(ent, "ew_global_item") then
+                    item_sync.make_item_global(ent, true)
+                end
             end
         end
     end
@@ -665,6 +740,7 @@ function item_sync.on_should_send_updates()
             local gid = item_sync.get_global_item_id(item)
             if gid ~= nil then
                 item_data.gid = gid
+                attach_loot_key_to_item_data(item, item_data)
                 table.insert(item_list, item_data)
             end
         end
@@ -712,12 +788,19 @@ local function add_stuff_to_globalized_item(item, gid)
     ctx.item_prevent_localize[gid] = false
 end
 
-local function spawn_local_wand_spell_copy(item)
-    local item_data = inventory_helper.serialize_single_item(item)
+local function spawn_local_loot_copy_from_data(item_data)
     local copy = inventory_helper.deserialize_single_item(item_data)
     local gid = allocate_global_id()
     add_stuff_to_globalized_item(copy, gid)
-    ensure_loot_key(copy)
+    apply_loot_key_from_data(copy, item_data)
+end
+
+local function spawn_local_loot_copy(item)
+    local item_data = inventory_helper.serialize_single_item(item)
+    if item_data.loot_key == nil then
+        item_data.loot_key = get_loot_key(item)
+    end
+    spawn_local_loot_copy_from_data(item_data)
 end
 
 rpc.opts_reliable()
@@ -732,6 +815,8 @@ function rpc.initial_items(item_list)
         if item == nil then
             local item_new = inventory_helper.deserialize_single_item(item_data)
             add_stuff_to_globalized_item(item_new, item_data.gid)
+            apply_loot_key_from_data(item_new, item_data)
+            cache_loot_template(item_data)
         end
     end
 end
@@ -759,6 +844,8 @@ function rpc.item_globalize(item_data)
     end
     local item = inventory_helper.deserialize_single_item(item_data)
     add_stuff_to_globalized_item(item, item_data.gid)
+    apply_loot_key_from_data(item, item_data)
+    cache_loot_template(item_data)
     for _, com in ipairs(EntityGetComponent(item, "VariableStorageComponent") or {}) do
         if ComponentGetValue2(com, "name") == "throw_time" then
             ComponentSetValue2(com, "value_int", GameGetFrameNum())
@@ -783,19 +870,24 @@ function rpc.item_localize(l_peer_id, item_id)
         end
     end
     if l_peer_id ~= ctx.my_id then
-        if
-            ctx.proxy_opt.duplicate_wands_spells
-            and item_ent_id ~= nil
-            and is_wand_or_spell(item_ent_id)
-            and EntityGetFirstComponentIncludingDisabled(item_ent_id, "VariableStorageComponent", "ew_loot_key")
-                ~= nil
-            and not ctx.claimed_loot_keys[get_loot_key(item_ent_id)]
-        then
-            spawn_local_wand_spell_copy(item_ent_id)
-            item_sync.remove_item_with_id(item_id)
-        else
-            item_sync.remove_item_with_id(item_id)
+        local loot_key = nil
+        local can_duplicate = false
+        if item_ent_id ~= nil and should_duplicate_loot(item_ent_id) then
+            can_duplicate = true
+            loot_key = get_loot_key(item_ent_id)
+        elseif ctx.loot_templates[item_id] ~= nil and ctx.loot_templates[item_id].loot_key ~= nil then
+            can_duplicate = true
+            loot_key = ctx.loot_templates[item_id].loot_key
         end
+        if can_duplicate and loot_key ~= nil and not ctx.claimed_loot_keys[loot_key] then
+            if item_ent_id ~= nil then
+                spawn_local_loot_copy(item_ent_id)
+            else
+                spawn_local_loot_copy_from_data(ctx.loot_templates[item_id])
+            end
+            GamePrint("Duplicated loot for you")
+        end
+        item_sync.remove_item_with_id(item_id)
     end
 end
 

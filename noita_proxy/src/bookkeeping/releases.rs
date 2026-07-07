@@ -205,20 +205,25 @@ impl Release {
 }
 
 pub fn get_latest_release(client: &Client) -> Result<Release, ReleasesError> {
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/latest",
+        env!("EW_GITHUB_REPO")
+    );
     let response = client
-        .get("https://api.github.com/repos/IntQuant/noita_entangled_worlds/releases/latest")
+        .get(&url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .header("User-agent", "noita proxy")
         .send()
-        .wrap_err("Failed to request latest release")?;
+        .wrap_err_with(|| format!("Failed to request latest release from {url}"))?;
 
     Ok(response.json()?)
 }
 
 pub fn get_release_by_tag(client: &Client, tag: Tag) -> Result<Release, ReleasesError> {
     let url = format!(
-        "https://api.github.com/repos/IntQuant/noita_entangled_worlds/releases/tags/{}",
+        "https://api.github.com/repos/{}/releases/tags/{}",
+        env!("EW_GITHUB_REPO"),
         tag.0
     );
     let response = client

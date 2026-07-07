@@ -20,6 +20,7 @@ ctx.init = function()
     ctx.player_data_by_local_entity = {}
     ctx.item_prevent_localize = {}
     ctx.claimed_loot_keys = {}
+    ctx.loot_templates = {}
     ctx.events = {}
     ctx.is_inventory_open = false
     ctx.rpc_peer_id = nil

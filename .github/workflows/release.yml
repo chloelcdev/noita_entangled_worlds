@@ -1,6 +1,14 @@
 name: release
 
-on: [push, pull_request]
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - master
+      - main
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build-mod:
@@ -51,6 +59,8 @@ jobs:
           workspaces: noita_proxy -> target
 
       - name: Build Linux proxy release
+        env:
+          EW_GITHUB_REPO: ${{ github.repository }}
         run: cargo build --release
         working-directory: ./noita_proxy
       
@@ -82,6 +92,8 @@ jobs:
           workspaces: noita_proxy -> target
 
       - name: Build Macos proxy release
+        env:
+          EW_GITHUB_REPO: ${{ github.repository }}
         run: export CMAKE_POLICY_VERSION_MINIMUM=3.5 && cargo build --release
         working-directory: ./noita_proxy
 
@@ -107,6 +119,8 @@ jobs:
           workspaces: noita_proxy -> target
 
       - name: Build Windows proxy release
+        env:
+          EW_GITHUB_REPO: ${{ github.repository }}
         run: cargo build --release
         working-directory: ./noita_proxy
 

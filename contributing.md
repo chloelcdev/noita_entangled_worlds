@@ -20,3 +20,5 @@ NP_NOITA_ADDR=127.0.0.1:21252 wine noita.exe # To start Noita
 ```
 
 You'll probably want to add NP_SKIP_MOD_CHECK=1 to disable automatic mod installation as well.
+
+By default the proxy keeps whatever `quant.ew` is already in your Noita mods folder, even if the version differs. It only downloads from GitHub when the mod is missing entirely. Set NP_FORCE_MOD_INSTALL=1 to restore the old strict version check.

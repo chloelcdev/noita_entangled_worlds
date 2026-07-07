@@ -1003,10 +1003,16 @@ impl NetManager {
         );
         state.try_ws_write_option("debug", settings.debug_mode.unwrap_or(def.debug_mode));
         state.try_ws_write_option(
-            "duplicate_wands_spells",
-            settings
-                .duplicate_wands_spells
-                .unwrap_or(def.duplicate_wands_spells),
+            "duplicate_wands",
+            settings.duplicate_wands.unwrap_or(def.duplicate_wands),
+        );
+        state.try_ws_write_option(
+            "duplicate_spells",
+            settings.duplicate_spells.unwrap_or(def.duplicate_spells),
+        );
+        state.try_ws_write_option(
+            "duplicate_perks",
+            settings.duplicate_perks.unwrap_or(def.duplicate_perks),
         );
         if self.is_host() {
             self.duplicate.store(

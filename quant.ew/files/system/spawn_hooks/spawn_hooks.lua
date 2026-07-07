@@ -16,8 +16,37 @@ exclude["data/entities/items/pickup/heart_fullhp.xml"] = true
 exclude["data/entities/items/pickup/heart_fullhp_temple.xml"] = true
 exclude["data/entities/items/pickup/perk_reroll.xml"] = true
 
+local function duplicate_option_enabled(key)
+    if ctx.proxy_opt[key] == true then
+        return true
+    end
+    return ModSettingGet("quant.ew." .. key) == true
+end
+
+local function is_wand_item_path(ent_path)
+    local prefix = "data/entities/items/wands/"
+    return string.sub(ent_path, 1, #prefix) == prefix
+end
+
+local function is_spell_item_path(ent_path)
+    return ent_path == "data/entities/misc/custom_cards/action.xml"
+end
+
+local function is_perk_item_path(ent_path)
+    return ent_path == "data/entities/items/pickup/perk.xml"
+end
+
 -- This entity needs to be synced by item_sync
 local function is_sync_item(ent_path)
+    if duplicate_option_enabled("duplicate_wands") and is_wand_item_path(ent_path) then
+        return true
+    end
+    if duplicate_option_enabled("duplicate_spells") and is_spell_item_path(ent_path) then
+        return true
+    end
+    if duplicate_option_enabled("duplicate_perks") and is_perk_item_path(ent_path) then
+        return true
+    end
     -- No item needs to be synced when this option is off.
     if not ctx.proxy_opt.item_dedup then
         return false
@@ -57,7 +86,10 @@ util.add_cross_call("ew_spawn_hook_pre", function(ent_path, x, y)
     end
 end)
 
-util.add_cross_call("ew_action_spawn_hook_pre", function()
+util.add_cross_call("ew_action_spawn_hook_pre", function(ent_path)
+    if duplicate_option_enabled("duplicate_spells") and is_spell_item_path(ent_path) then
+        return ctx.is_host
+    end
     return (not ctx.proxy_opt.item_dedup) or ctx.is_host
 end)
 

@@ -3,6 +3,14 @@ setlocal
 
 cd /d "%~dp0"
 
+if exist "release.env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%A in ("release.env") do (
+        if /i "%%A"=="EW_GITHUB_REPO" set "EW_GITHUB_REPO=%%B"
+    )
+)
+if not defined EW_GITHUB_REPO set "EW_GITHUB_REPO=chloelcdev/noita_entangled_worlds"
+set "EW_GITHUB_REPO=%EW_GITHUB_REPO: =%"
+
 set "PATH=C:\Program Files\CMake\bin;%USERPROFILE%\.cargo\bin;%PATH%"
 set "CARGO_TARGET_DIR=%LOCALAPPDATA%\noita_proxy_target"
 set "CMAKE_POLICY_VERSION_MINIMUM=3.5"
@@ -21,7 +29,7 @@ if exist "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Bui
 where cargo >nul 2>&1
 if errorlevel 1 (
     echo Rust/cargo not found. Install from https://rustup.rs then reopen this window.
-    pause
+    if /i not "%~1"=="nopause" pause
     exit /b 1
 )
 
@@ -29,12 +37,11 @@ where cmake >nul 2>&1
 if errorlevel 1 (
     echo CMake not found.
     echo Expected: C:\Program Files\CMake\bin\cmake.exe
-    echo Install from https://cmake.org/download/ and check "Add to PATH"
-    pause
+    if /i not "%~1"=="nopause" pause
     exit /b 1
 )
 
-echo Building noita_proxy ^(release^)...
+echo Building noita_proxy ^(release^) for GitHub repo: %EW_GITHUB_REPO%
 echo Build output: %OUT%
 echo.
 
@@ -43,32 +50,46 @@ cargo build --release
 if errorlevel 1 (
     echo.
     echo Build failed.
-    pause
+    if /i not "%~1"=="nopause" pause
     exit /b 1
 )
 cd ..
 
 if not exist "%EXE%" (
     echo Expected exe missing: %EXE%
-    pause
+    if /i not "%~1"=="nopause" pause
     exit /b 1
 )
 
-if exist "redist\steam_api64.dll" (
-    copy /Y "redist\steam_api64.dll" "%OUT%\steam_api64.dll" >nul
-    echo Copied steam_api64.dll into release folder.
-) else (
-    echo.
-    echo Note: copy steam_api64.dll from noita_proxy-win.zip next to:
-    echo   %EXE%
+where python >nul 2>&1
+if errorlevel 1 (
+    echo Python not found - skipping zip packaging. Install Python to package quant.ew.zip.
+    goto stage_exe_only
 )
 
+set "PROXY_EXE=%EXE%"
+python scripts\package_fork_release.py
+if errorlevel 1 (
+    echo Packaging failed.
+    if /i not "%~1"=="nopause" pause
+    exit /b 1
+)
+goto done
+
+:stage_exe_only
+set "STAGE=%~dp0release"
+if not exist "%STAGE%" mkdir "%STAGE%"
+copy /Y "%EXE%" "%STAGE%\noita_proxy.exe" >nul
+if exist "redist\steam_api64.dll" copy /Y "redist\steam_api64.dll" "%STAGE%\steam_api64.dll" >nul
+
+:done
 echo.
 echo Done.
-echo   %EXE%
+echo   Proxy exe: %EXE%
+echo   Staged:    %~dp0release\
+echo   Mod/proxy zips download from: https://github.com/%EW_GITHUB_REPO%/releases
 echo.
-echo Dev tip - skip auto mod install:
-echo   set NP_SKIP_MOD_CHECK=1
-echo   "%EXE%"
+echo Publish to GitHub: publish_release.bat
+echo Local dev ^(skip mod download^): set NP_SKIP_MOD_CHECK=1
 echo.
-pause
+if /i not "%~1"=="nopause" pause

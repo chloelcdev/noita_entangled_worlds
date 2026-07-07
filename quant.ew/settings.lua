@@ -266,6 +266,34 @@ local function build_settings()
             },
         },
         {
+            category_id = "loot",
+            ui_name = "Loot",
+            ui_description = "Per-player loot duplication",
+            settings = {
+                {
+                    id = "duplicate_wands",
+                    ui_name = "Duplicate wands (one per player)",
+                    ui_description = "When someone picks up a synced wand, other players get their own copy. Proxy host setting overrides this.",
+                    value_default = false,
+                    scope = MOD_SETTING_SCOPE_NEW_GAME,
+                },
+                {
+                    id = "duplicate_spells",
+                    ui_name = "Duplicate spells (one per player)",
+                    ui_description = "When someone picks up a synced spell, other players get their own copy. Proxy host setting overrides this.",
+                    value_default = false,
+                    scope = MOD_SETTING_SCOPE_NEW_GAME,
+                },
+                {
+                    id = "duplicate_perks",
+                    ui_name = "Duplicate perks (one per player)",
+                    ui_description = "When someone picks up a synced perk, other players get their own copy. Proxy host setting overrides this.",
+                    value_default = false,
+                    scope = MOD_SETTING_SCOPE_NEW_GAME,
+                },
+            },
+        },
+        {
             category_id = "misc",
             ui_name = "misc",
             ui_description = "misc",
