@@ -1,7 +1,6 @@
 fn main() {
-    let repo = std::env::var("EW_GITHUB_REPO").unwrap_or_else(|_| {
-        "IntQuant/noita_entangled_worlds".to_string()
-    });
+    let repo = std::env::var("EW_GITHUB_REPO")
+        .unwrap_or_else(|_| "IntQuant/noita_entangled_worlds".to_string());
     println!("cargo:rustc-env=EW_GITHUB_REPO={repo}");
 
     #[cfg(target_os = "linux")]
